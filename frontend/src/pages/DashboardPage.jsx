@@ -1,65 +1,86 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
-import toast from "react-hot-toast";
-import { sessionApi } from "../api/sessions";
+import { useNavigate } from "react-router-dom";
+import { useUser } from "@clerk/clerk-react";
+import { useState } from "react";
+import { useActiveSessions, useCreateSession, useMyRecentSessions } from "../hooks/useSessions";
 
-export const useCreateSession = () => {
-  const result = useMutation({
-    mutationKey: ["createSession"],
-    mutationFn: sessionApi.createSession,
-    onSuccess: () => toast.success("Session created successfully!"),
-    onError: (error) => toast.error(error.response?.data?.message || "Failed to create room"),
-  });
+import Navbar from "../components/Navbar";
+import WelcomeSection from "../components/WelcomeSection";
+import StatsCards from "../components/StatsCards";
+import ActiveSessions from "../components/ActiveSessions";
+import RecentSessions from "../components/RecentSessions";
+import CreateSessionModal from "../components/CreateSessionModal";
 
-  return result;
-};
+function DashboardPage() {
+  const navigate = useNavigate();
+  const { user } = useUser();
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [roomConfig, setRoomConfig] = useState({ problem: "", difficulty: "" });
 
-export const useActiveSessions = () => {
-  const result = useQuery({
-    queryKey: ["activeSessions"],
-    queryFn: sessionApi.getActiveSessions,
-  });
+  const createSessionMutation = useCreateSession();
 
-  return result;
-};
+  const { data: activeSessionsData, isLoading: loadingActiveSessions } = useActiveSessions();
+  const { data: recentSessionsData, isLoading: loadingRecentSessions } = useMyRecentSessions();
 
-export const useMyRecentSessions = () => {
-  const result = useQuery({
-    queryKey: ["myRecentSessions"],
-    queryFn: sessionApi.getMyRecentSessions,
-  });
+  const handleCreateRoom = () => {
+    if (!roomConfig.problem || !roomConfig.difficulty) return;
 
-  return result;
-};
+    createSessionMutation.mutate(
+      {
+        problem: roomConfig.problem,
+        difficulty: roomConfig.difficulty.toLowerCase(),
+      },
+      {
+        onSuccess: (data) => {
+          setShowCreateModal(false);
+          navigate(`/session/${data.session._id}`);
+        },
+      }
+    );
+  };
 
-export const useSessionById = (id) => {
-  const result = useQuery({
-    queryKey: ["session", id],
-    queryFn: () => sessionApi.getSessionById(id),
-    enabled: !!id,
-    refetchInterval: 5000, // refetch every 5 seconds to detect session status changes
-  });
+  const activeSessions = activeSessionsData?.sessions || [];
+  const recentSessions = recentSessionsData?.sessions || [];
 
-  return result;
-};
+  const isUserInSession = (session) => {
+    if (!user.id) return false;
 
-export const useJoinSession = () => {
-  const result = useMutation({
-    mutationKey: ["joinSession"],
-    mutationFn: sessionApi.joinSession,
-    onSuccess: () => toast.success("Joined session successfully!"),
-    onError: (error) => toast.error(error.response?.data?.message || "Failed to join session"),
-  });
+    return session.host?.clerkId === user.id || session.participant?.clerkId === user.id;
+  };
 
-  return result;
-};
+  return (
+    <>
+      <div className="min-h-screen bg-base-300">
+        <Navbar />
+        <WelcomeSection onCreateSession={() => setShowCreateModal(true)} />
 
-export const useEndSession = () => {
-  const result = useMutation({
-    mutationKey: ["endSession"],
-    mutationFn: sessionApi.endSession,
-    onSuccess: () => toast.success("Session ended successfully!"),
-    onError: (error) => toast.error(error.response?.data?.message || "Failed to end session"),
-  });
+        {/* Grid layout */}
+        <div className="container mx-auto px-6 pb-16">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <StatsCards
+              activeSessionsCount={activeSessions.length}
+              recentSessionsCount={recentSessions.length}
+            />
+            <ActiveSessions
+              sessions={activeSessions}
+              isLoading={loadingActiveSessions}
+              isUserInSession={isUserInSession}
+            />
+          </div>
 
-  return result;
-};
+          <RecentSessions sessions={recentSessions} isLoading={loadingRecentSessions} />
+        </div>
+      </div>
+
+      <CreateSessionModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        roomConfig={roomConfig}
+        setRoomConfig={setRoomConfig}
+        onCreateRoom={handleCreateRoom}
+        isCreating={createSessionMutation.isPending}
+      />
+    </>
+  );
+}
+
+export default DashboardPage;
