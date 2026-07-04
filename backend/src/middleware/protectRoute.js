@@ -1,5 +1,5 @@
 import { requireAuth } from '@clerk/express';
-import User from '../models/User.js';
+import { ensureUserFromClerkId } from '../lib/userSync.js';
 
  export const protectRoute = [
     requireAuth(),
@@ -7,10 +7,10 @@ import User from '../models/User.js';
         try{
             const clerkId = req.auth().userId;
             if(!clerkId) return res.status(401).json({msg: "Unauthorized- invalid token"});
-                //find user in db by clerk ID
-            const user = await User.findOne({ clerkId });
+                //find or create user in db by Clerk ID
+            const user = await ensureUserFromClerkId(clerkId);
 
-            if(!user)return res.status(404).json({msg: "User not found"});
+            if(!user)return res.status(404).json({message: "User not found"});
             
             req.user=user;
             

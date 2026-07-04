@@ -1,4 +1,4 @@
-import { Link, useLocation } from "react-router";
+import { Link, useLocation } from "react-router-dom";
 import { BookOpenIcon, LayoutDashboardIcon, SparklesIcon } from "lucide-react";
 import { UserButton } from "@clerk/clerk-react";
 
@@ -23,7 +23,7 @@ function Navbar() {
 
           <div className="flex flex-col">
             <span className="font-black text-xl bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent font-mono tracking-wider">
-              Talent IQ
+              Intervo
             </span>
             <span className="text-xs text-base-content/60 font-medium -mt-1">Code Together</span>
           </div>
