@@ -2,7 +2,7 @@
 
 > A real-time coding interview platform where developers can solve problems, run code, video call, and chat inside one focused workspace.
 
-![Intervo Preview](frontend/public/screenshot-for-readme.png)
+![Intervo Hero](frontend/public/hero.png)
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=111)
 ![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite&logoColor=white)
