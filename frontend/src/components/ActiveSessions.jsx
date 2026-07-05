@@ -21,7 +21,7 @@ function ActiveSessions({ sessions, isLoading, isUserInSession }) {
             <div className="p-2 bg-gradient-to-br from-primary to-secondary rounded-xl">
               <ZapIcon className="size-5" />
             </div>
-            <h2 className="text-2xl font-black">Live Sessions</h2>
+            <h2 className="text-2xl font-black">Your Live Sessions</h2>
           </div>
 
           <div className="flex items-center gap-2">
@@ -72,10 +72,15 @@ function ActiveSessions({ sessions, isLoading, isUserInSession }) {
                           <UsersIcon className="size-4" />
                           <span className="text-xs">{session.participant ? "2/2" : "1/2"}</span>
                         </div>
+                        {session.problems?.length > 1 && (
+                          <span className="badge badge-outline badge-sm">
+                            {session.problems.length} questions
+                          </span>
+                        )}
                         {session.participant && !isUserInSession(session) ? (
                           <span className="badge badge-error badge-sm">FULL</span>
                         ) : (
-                          <span className="badge badge-success badge-sm">OPEN</span>
+                          <span className="badge badge-info badge-sm">INVITE ONLY</span>
                         )}
                       </div>
                     </div>
@@ -85,7 +90,7 @@ function ActiveSessions({ sessions, isLoading, isUserInSession }) {
                     <button className="btn btn-disabled btn-sm">Full</button>
                   ) : (
                     <Link to={`/session/${session._id}`} className="btn btn-primary btn-sm gap-2">
-                      {isUserInSession(session) ? "Rejoin" : "Join"}
+                      {isUserInSession(session) ? "Open" : "Join"}
                       <ArrowRightIcon className="size-4" />
                     </Link>
                   )}
@@ -97,8 +102,8 @@ function ActiveSessions({ sessions, isLoading, isUserInSession }) {
               <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-primary/20 to-secondary/20 rounded-3xl flex items-center justify-center">
                 <SparklesIcon className="w-10 h-10 text-primary/50" />
               </div>
-              <p className="text-lg font-semibold opacity-70 mb-1">No active sessions</p>
-              <p className="text-sm opacity-50">Be the first to create one!</p>
+              <p className="text-lg font-semibold opacity-70 mb-1">No active private sessions</p>
+              <p className="text-sm opacity-50">Create a session and share its invite link.</p>
             </div>
           )}
         </div>

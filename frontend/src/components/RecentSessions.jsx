@@ -55,6 +55,11 @@ function RecentSessions({ sessions, isLoading }) {
                       >
                         {session.difficulty}
                       </span>
+                      {session.problems?.length > 1 && (
+                        <span className="badge badge-outline badge-sm ml-2">
+                          {session.problems.length} questions
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -74,6 +79,24 @@ function RecentSessions({ sessions, isLoading }) {
                         {session.participant ? "s" : ""}
                       </span>
                     </div>
+                    {session.evaluation &&
+                      (session.evaluation.score !== null ||
+                        session.evaluation.decision !== "pending") && (
+                        <div className="rounded-lg bg-base-100 p-3 border border-base-300 space-y-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold">Evaluation</span>
+                            <span className="badge badge-sm">
+                              {session.evaluation.decision || "pending"}
+                            </span>
+                          </div>
+                          {session.evaluation.score !== null && (
+                            <p>Score: {session.evaluation.score}/10</p>
+                          )}
+                          {session.evaluation.notes && (
+                            <p className="line-clamp-2 opacity-70">{session.evaluation.notes}</p>
+                          )}
+                        </div>
+                      )}
                   </div>
 
                   <div className="flex items-center justify-between pt-3 border-t border-base-300">

@@ -1,15 +1,30 @@
 import { useUser } from "@clerk/clerk-react";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useEndSession, useJoinSession, useSessionById } from "../hooks/useSessions";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  useEndSession,
+  useJoinSession,
+  useSessionById,
+  useUpdateSessionEvaluation,
+} from "../hooks/useSessions";
 import { PROBLEMS } from "../data/problems";
 import { executeCode } from "../lib/piston";
 import Navbar from "../components/Navbar";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { getDifficultyBadgeClass } from "../lib/utils";
-import { Loader2Icon, LogOutIcon, PhoneOffIcon } from "lucide-react";
+import {
+  ClipboardCheckIcon,
+  CopyIcon,
+  Loader2Icon,
+  LogOutIcon,
+  PhoneOffIcon,
+  SaveIcon,
+  ShieldCheckIcon,
+  UserRoundIcon,
+} from "lucide-react";
 import CodeEditorPanel from "../components/CodeEditorPanel";
 import OutputPanel from "../components/OutputPanel";
+import toast from "react-hot-toast";
 
 import useStreamClient from "../hooks/useStreamClient";
 import { StreamCall, StreamVideo } from "@stream-io/video-react-sdk";
@@ -18,14 +33,29 @@ import VideoCallUI from "../components/VideoCallUI";
 function SessionPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { user } = useUser();
   const [output, setOutput] = useState(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [activeProblemTitle, setActiveProblemTitle] = useState("");
+  const [evaluationForm, setEvaluationForm] = useState({
+    notes: "",
+    score: "",
+    decision: "pending",
+  });
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const inviteToken = searchParams.get("invite") || "";
 
-  const { data: sessionData, isLoading: loadingSession, refetch } = useSessionById(id);
+  const {
+    data: sessionData,
+    isLoading: loadingSession,
+    error: sessionError,
+    refetch,
+  } = useSessionById(id, inviteToken);
 
   const joinSessionMutation = useJoinSession();
   const endSessionMutation = useEndSession();
+  const updateEvaluationMutation = useUpdateSessionEvaluation();
 
   const session = sessionData?.session;
   const isHost = session?.host?.clerkId === user?.id;
@@ -38,23 +68,40 @@ function SessionPage() {
     isParticipant
   );
 
-  // find the problem data based on session problem title
-  const problemData = session?.problem
-    ? Object.values(PROBLEMS).find((p) => p.title === session.problem)
+  const sessionProblems = useMemo(
+    () => (session?.problems?.length ? session.problems : session?.problem ? [session.problem] : []),
+    [session?.problem, session?.problems]
+  );
+  const selectedProblemTitle = activeProblemTitle || sessionProblems[0] || "";
+
+  // find the problem data based on selected session problem title
+  const problemData = selectedProblemTitle
+    ? Object.values(PROBLEMS).find((p) => p.title === selectedProblemTitle)
     : null;
 
   const [selectedLanguage, setSelectedLanguage] = useState("javascript");
   const [code, setCode] = useState(problemData?.starterCode?.[selectedLanguage] || "");
+  const [codeByProblem, setCodeByProblem] = useState({});
 
   // auto-join session if user is not already a participant and not the host
   useEffect(() => {
     if (!session || !user || loadingSession) return;
     if (isHost || isParticipant) return;
 
-    joinSessionMutation.mutate(id, { onSuccess: refetch });
+    joinSessionMutation.mutate({ id, inviteToken }, { onSuccess: refetch });
 
     // remove the joinSessionMutation, refetch from dependencies to avoid infinite loop
-  }, [session, user, loadingSession, isHost, isParticipant, id]);
+  }, [
+    session,
+    user,
+    loadingSession,
+    isHost,
+    isParticipant,
+    id,
+    inviteToken,
+    joinSessionMutation,
+    refetch,
+  ]);
 
   // redirect the "participant" when session ends
   useEffect(() => {
@@ -65,18 +112,58 @@ function SessionPage() {
 
   // update code when problem loads or changes
   useEffect(() => {
-    if (problemData?.starterCode?.[selectedLanguage]) {
-      setCode(problemData.starterCode[selectedLanguage]);
+    if (!problemData?.starterCode?.[selectedLanguage] || !selectedProblemTitle) return;
+
+    const codeKey = `${selectedProblemTitle}:${selectedLanguage}`;
+    const savedCode = codeByProblem[codeKey];
+
+    if (savedCode !== undefined) {
+      setCode(savedCode);
+      setOutput(null);
+      return;
     }
-  }, [problemData, selectedLanguage]);
+
+    const starterCode = problemData.starterCode[selectedLanguage];
+    setCode(starterCode);
+    setCodeByProblem((current) => ({
+      ...current,
+      [codeKey]: starterCode,
+    }));
+    setOutput(null);
+  }, [problemData, selectedLanguage, selectedProblemTitle, codeByProblem]);
+
+  useEffect(() => {
+    if (!activeProblemTitle && sessionProblems.length > 0) {
+      setActiveProblemTitle(sessionProblems[0]);
+    }
+  }, [activeProblemTitle, sessionProblems]);
+
+  useEffect(() => {
+    if (!session?.evaluation) return;
+
+    setEvaluationForm({
+      notes: session.evaluation.notes || "",
+      score: session.evaluation.score ?? "",
+      decision: session.evaluation.decision || "pending",
+    });
+  }, [session?.evaluation]);
 
   const handleLanguageChange = (e) => {
     const newLang = e.target.value;
     setSelectedLanguage(newLang);
-    // use problem-specific starter code
-    const starterCode = problemData?.starterCode?.[newLang] || "";
-    setCode(starterCode);
     setOutput(null);
+  };
+
+  const handleCodeChange = (value) => {
+    const nextCode = value || "";
+    setCode(nextCode);
+
+    if (!selectedProblemTitle) return;
+
+    setCodeByProblem((current) => ({
+      ...current,
+      [`${selectedProblemTitle}:${selectedLanguage}`]: nextCode,
+    }));
   };
 
   const handleRunCode = async () => {
@@ -95,6 +182,53 @@ function SessionPage() {
     }
   };
 
+  const handleCopyInvite = async () => {
+    if (!session?.inviteToken) return;
+
+    const inviteLink = `${window.location.origin}/session/${session._id}?invite=${session.inviteToken}&code=${session.inviteCode}`;
+
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setInviteCopied(true);
+      toast.success("Invite link copied");
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy invite link");
+    }
+  };
+
+  const handleSaveEvaluation = () => {
+    updateEvaluationMutation.mutate(
+      {
+        id,
+        evaluation: evaluationForm,
+      },
+      { onSuccess: refetch }
+    );
+  };
+
+  if (sessionError) {
+    return (
+      <div className="min-h-screen bg-base-200">
+        <Navbar />
+        <div className="container mx-auto px-6 py-20">
+          <div className="card bg-base-100 max-w-xl mx-auto shadow-xl">
+            <div className="card-body items-center text-center">
+              <ShieldCheckIcon className="size-12 text-error" />
+              <h1 className="card-title text-2xl">Private Session</h1>
+              <p className="text-base-content/70">
+                This session is invite-only. Ask the interviewer for the correct invite link.
+              </p>
+              <button className="btn btn-primary mt-4" onClick={() => navigate("/dashboard")}>
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-base-100 flex flex-col">
       <Navbar />
@@ -112,7 +246,7 @@ function SessionPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <h1 className="text-3xl font-bold text-base-content">
-                          {session?.problem || "Loading..."}
+                          {selectedProblemTitle || "Loading..."}
                         </h1>
                         {problemData?.category && (
                           <p className="text-base-content/60 mt-1">{problemData.category}</p>
@@ -121,6 +255,17 @@ function SessionPage() {
                           Host: {session?.host?.name || "Loading..."} •{" "}
                           {session?.participant ? 2 : 1}/2 participants
                         </p>
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
+                          <span className="badge badge-primary gap-1">
+                            <ShieldCheckIcon className="size-3" />
+                            Interviewer
+                          </span>
+                          <span className="badge badge-secondary gap-1">
+                            <UserRoundIcon className="size-3" />
+                            Candidate
+                          </span>
+                          <span className="badge badge-outline">Private invite-only room</span>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-3">
@@ -133,24 +278,60 @@ function SessionPage() {
                             session?.difficulty.slice(1) || "Easy"}
                         </span>
                         {isHost && session?.status === "active" && (
-                          <button
-                            onClick={handleEndSession}
-                            disabled={endSessionMutation.isPending}
-                            className="btn btn-error btn-sm gap-2"
-                          >
-                            {endSessionMutation.isPending ? (
-                              <Loader2Icon className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <LogOutIcon className="w-4 h-4" />
+                          <>
+                            {session?.inviteCode && (
+                              <span className="badge badge-info badge-lg">
+                                Code: {session.inviteCode}
+                              </span>
                             )}
-                            End Session
-                          </button>
+                            <button
+                              onClick={handleCopyInvite}
+                              className="btn btn-outline btn-sm gap-2"
+                              disabled={!session?.inviteToken}
+                            >
+                              {inviteCopied ? (
+                                <ClipboardCheckIcon className="w-4 h-4" />
+                              ) : (
+                                <CopyIcon className="w-4 h-4" />
+                              )}
+                              Invite Link
+                            </button>
+                            <button
+                              onClick={handleEndSession}
+                              disabled={endSessionMutation.isPending}
+                              className="btn btn-error btn-sm gap-2"
+                            >
+                              {endSessionMutation.isPending ? (
+                                <Loader2Icon className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <LogOutIcon className="w-4 h-4" />
+                              )}
+                              End Session
+                            </button>
+                          </>
                         )}
                         {session?.status === "completed" && (
                           <span className="badge badge-ghost badge-lg">Completed</span>
                         )}
                       </div>
                     </div>
+
+                    {sessionProblems.length > 1 && (
+                      <div className="flex flex-wrap gap-2 mt-5">
+                        {sessionProblems.map((problemTitle, index) => (
+                          <button
+                            key={problemTitle}
+                            type="button"
+                            onClick={() => setActiveProblemTitle(problemTitle)}
+                            className={`btn btn-sm ${
+                              selectedProblemTitle === problemTitle ? "btn-primary" : "btn-ghost"
+                            }`}
+                          >
+                            {index + 1}. {problemTitle}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-6 space-y-6">
@@ -237,7 +418,7 @@ function SessionPage() {
                       code={code}
                       isRunning={isRunning}
                       onLanguageChange={handleLanguageChange}
-                      onCodeChange={(value) => setCode(value)}
+                      onCodeChange={handleCodeChange}
                       onRunCode={handleRunCode}
                     />
                   </Panel>
@@ -257,6 +438,109 @@ function SessionPage() {
           {/* RIGHT PANEL - VIDEO CALLS & CHAT */}
           <Panel defaultSize={50} minSize={30}>
             <div className="h-full bg-base-200 p-4 overflow-auto">
+              <div className="card bg-base-100 border border-base-300 mb-4">
+                <div className="card-body p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="font-bold text-lg">
+                        {isHost ? "Interviewer Dashboard" : "Candidate View"}
+                      </h2>
+                      <p className="text-sm text-base-content/60">
+                        {isHost
+                          ? "Track notes, score, and final decision for this session."
+                          : "You are joining this private room as the candidate."}
+                      </p>
+                    </div>
+                    <span className="badge badge-primary">
+                      {isHost ? "Interviewer" : "Candidate"}
+                    </span>
+                  </div>
+
+                  {isHost ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="form-control">
+                          <span className="label-text font-semibold mb-1">Score</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="10"
+                            className="input input-bordered input-sm"
+                            value={evaluationForm.score}
+                            onChange={(e) =>
+                              setEvaluationForm((current) => ({
+                                ...current,
+                                score: e.target.value,
+                              }))
+                            }
+                            placeholder="0-10"
+                          />
+                        </label>
+                        <label className="form-control">
+                          <span className="label-text font-semibold mb-1">Decision</span>
+                          <select
+                            className="select select-bordered select-sm"
+                            value={evaluationForm.decision}
+                            onChange={(e) =>
+                              setEvaluationForm((current) => ({
+                                ...current,
+                                decision: e.target.value,
+                              }))
+                            }
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="strong-no">Strong No</option>
+                            <option value="no">No</option>
+                            <option value="hold">Hold</option>
+                            <option value="yes">Yes</option>
+                            <option value="strong-yes">Strong Yes</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className="form-control">
+                        <span className="label-text font-semibold mb-1">Private Notes</span>
+                        <textarea
+                          className="textarea textarea-bordered min-h-24"
+                          value={evaluationForm.notes}
+                          onChange={(e) =>
+                            setEvaluationForm((current) => ({
+                              ...current,
+                              notes: e.target.value,
+                            }))
+                          }
+                          placeholder="Capture communication, approach, edge cases, and final feedback."
+                        />
+                      </label>
+
+                      <button
+                        className="btn btn-primary btn-sm gap-2"
+                        onClick={handleSaveEvaluation}
+                        disabled={updateEvaluationMutation.isPending}
+                      >
+                        {updateEvaluationMutation.isPending ? (
+                          <Loader2Icon className="size-4 animate-spin" />
+                        ) : (
+                          <SaveIcon className="size-4" />
+                        )}
+                        Save Evaluation
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-lg bg-base-200 p-3">
+                        <p className="font-semibold">Interviewer</p>
+                        <p className="text-base-content/70">{session?.host?.name || "Loading..."}</p>
+                      </div>
+                      <div className="rounded-lg bg-base-200 p-3">
+                        <p className="font-semibold">Questions</p>
+                        <p className="text-base-content/70">{sessionProblems.length || 1} selected</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {isInitializingCall ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center">

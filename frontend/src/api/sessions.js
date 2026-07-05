@@ -15,17 +15,27 @@ export const sessionApi = {
     return response.data;
   },
 
-  getSessionById: async (id) => {
-    const response = await axiosInstance.get(`/sessions/${id}`);
+  getSessionById: async ({ id, inviteToken }) => {
+    const response = await axiosInstance.get(`/sessions/${id}`, {
+      params: inviteToken ? { invite: inviteToken } : {},
+    });
     return response.data;
   },
 
-  joinSession: async (id) => {
-    const response = await axiosInstance.post(`/sessions/${id}/join`);
+  joinSession: async ({ id, inviteToken }) => {
+    const response = await axiosInstance.post(`/sessions/${id}/join`, { inviteToken });
+    return response.data;
+  },
+  joinSessionByInvite: async (invite) => {
+    const response = await axiosInstance.post(`/sessions/join-by-invite`, { invite });
     return response.data;
   },
   endSession: async (id) => {
     const response = await axiosInstance.post(`/sessions/${id}/end`);
+    return response.data;
+  },
+  updateSessionEvaluation: async ({ id, evaluation }) => {
+    const response = await axiosInstance.patch(`/sessions/${id}/evaluation`, evaluation);
     return response.data;
   },
   getStreamToken: async () => {

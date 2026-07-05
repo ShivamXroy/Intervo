@@ -1,6 +1,6 @@
 # Intervo
 
-> A real-time coding interview platform where developers can solve problems, run code, video call, and chat inside one focused workspace.
+> A real-time private coding interview platform where developers can solve problems, run code, video call, chat, and review candidates inside one focused workspace.
 
 ![Intervo Hero](frontend/public/hero-readme.png)
 
@@ -13,9 +13,9 @@
 
 ## The vibe
 
-Intervo is built for live coding practice without the tab chaos.
+Intervo is built for live coding interviews without the tab chaos.
 
-No jumping between a meeting app, a notes app, a coding website, and a chat window. Intervo puts the interview room, problem statement, code editor, output panel, video call, and chat in one place.
+No jumping between a meeting app, a notes app, a coding website, and a chat window. Intervo puts the private interview room, problem set, code editor, output panel, video call, chat, and interviewer evaluation tools in one place.
 
 It is made for:
 
@@ -23,6 +23,7 @@ It is made for:
 - 🤝 pair programming practice
 - 📚 DSA problem solving
 - 🎥 live technical sessions
+- 🔐 private invite-only interview rooms
 - ⚡ focused interview prep
 
 ## What it does
@@ -30,29 +31,34 @@ It is made for:
 | Feature | What you get |
 |---|---|
 | 🔐 Authentication | Sign in securely with Clerk |
-| 🧭 Dashboard | See active sessions, recent sessions, and stats |
-| 🏁 Create sessions | Start a coding room with a selected problem |
-| 🚪 Join sessions | Enter open live rooms from the dashboard |
+| 🧭 Dashboard | See your private sessions, recent sessions, and stats |
+| 🏁 Create sessions | Start a private coding room with one or more selected questions |
+| 🔑 Join by invite | Join private sessions with an invite link or short invite code |
 | 🎥 Video calls | Talk face-to-face inside the session |
 | 💬 Session chat | Message during the interview |
 | 🧠 Practice problems | Solve curated coding questions |
 | 📝 Code editor | Write code in a Monaco-powered editor |
+| 🧩 Per-question code memory | Switch between session questions without losing code |
+| 🧑‍💼 Interview roles | Host works as interviewer, invitee joins as candidate |
+| 📋 Evaluation | Interviewer can save private notes, score, and decision |
 | ▶️ Code runner | Execute code using the Piston API |
 | 🌍 Multi-language support | JavaScript, Python, and Java |
-| 📌 Session history | View completed sessions in recent activity |
+| 📌 Session history | View completed sessions and saved evaluation details |
 
 ## How the app flows
 
 ```mermaid
 flowchart LR
     A["Sign in"] --> B["Open dashboard"]
-    B --> C["Create or join session"]
-    C --> D["Read problem"]
-    D --> E["Write code"]
-    E --> F["Run code"]
-    C --> G["Video call"]
-    C --> H["Chat"]
-    F --> I["End session"]
+    B --> C["Create private session"]
+    C --> D["Select one or more questions"]
+    D --> E["Share invite link or code"]
+    E --> F["Candidate joins"]
+    F --> G["Video call and chat"]
+    F --> H["Solve questions"]
+    H --> I["Run code"]
+    I --> J["Save evaluation"]
+    J --> K["End session"]
 ```
 
 ## Architecture
@@ -81,10 +87,12 @@ flowchart TD
 ```mermaid
 stateDiagram-v2
     [*] --> Created
-    Created --> Active: host starts room
-    Active --> Joined: participant joins
+    Created --> Active: interviewer starts private room
+    Active --> Invited: invite link or code shared
+    Invited --> Joined: candidate joins
     Joined --> Live: video and chat active
-    Live --> Completed: host ends session
+    Live --> Evaluated: interviewer saves score and notes
+    Evaluated --> Completed: interviewer ends session
     Completed --> RecentSessions
     RecentSessions --> [*]
 ```
@@ -122,7 +130,7 @@ stateDiagram-v2
 | Service | Purpose |
 |---|---|
 | Clerk | Authentication |
-| MongoDB | Database |
+| MongoDB | Database and session history |
 | Stream | Video calls and chat |
 | Piston | Code execution |
 | Inngest | Clerk user webhook handling |
@@ -235,11 +243,13 @@ http://localhost:5173
 | Method | Route | Description |
 |---|---|---|
 | GET | `/health` | Check backend status |
-| POST | `/api/sessions` | Create a coding session |
-| GET | `/api/sessions/active` | Get active sessions |
+| POST | `/api/sessions` | Create a private coding session |
+| GET | `/api/sessions/active` | Get current user's active sessions |
 | GET | `/api/sessions/my-recent` | Get recent completed sessions |
+| POST | `/api/sessions/join-by-invite` | Join a private session with invite link or code |
 | GET | `/api/sessions/:id` | Get one session |
-| POST | `/api/sessions/:id/join` | Join a session |
+| POST | `/api/sessions/:id/join` | Join a session with a valid invite token |
+| PATCH | `/api/sessions/:id/evaluation` | Save interviewer notes, score, and decision |
 | POST | `/api/sessions/:id/end` | End a session |
 | GET | `/api/chat/token` | Get Stream token |
 
@@ -247,9 +257,11 @@ http://localhost:5173
 
 - 🏠 Landing page
 - 📊 Dashboard
+- 🔑 Private invite join box
 - 📚 Problems page
 - 🧑‍💻 Problem workspace
 - 🎥 Live session room
+- 📋 Interviewer evaluation panel
 - 💬 Chat panel
 - ▶️ Output panel
 
@@ -257,10 +269,22 @@ http://localhost:5173
 
 Intervo keeps the full interview flow in one place:
 
+- private invite-only access
+- multiple questions inside one session
 - problem statement on one side
 - code editor and output ready to go
+- per-question code memory while switching questions
 - video call for real conversation
 - chat for quick messages
-- dashboard to jump into sessions fast
+- interviewer notes, score, and decision saved to session history
+- dashboard to create, join, and reopen sessions fast
 
-Simple, focused, and actually useful for practice.
+Simple, focused, and actually useful for interview practice.
+
+## License
+
+This project uses the ISC license.
+
+## Author
+
+Built by Shivam.

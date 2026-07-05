@@ -1,4 +1,4 @@
-import { Code2Icon, LoaderIcon, PlusIcon } from "lucide-react";
+import { CheckCircle2Icon, Code2Icon, LoaderIcon, PlusIcon } from "lucide-react";
 import { PROBLEMS } from "../data/problems";
 
 function CreateSessionModal({
@@ -10,6 +10,17 @@ function CreateSessionModal({
   isCreating,
 }) {
   const problems = Object.values(PROBLEMS);
+  const selectedProblems = roomConfig.problems || [];
+
+  const toggleProblem = (problem) => {
+    const isSelected = selectedProblems.some((item) => item.id === problem.id);
+
+    setRoomConfig({
+      problems: isSelected
+        ? selectedProblems.filter((item) => item.id !== problem.id)
+        : [...selectedProblems, problem],
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -22,44 +33,56 @@ function CreateSessionModal({
           {/* PROBLEM SELECTION */}
           <div className="space-y-2">
             <label className="label">
-              <span className="label-text font-semibold">Select Problem</span>
+              <span className="label-text font-semibold">Select Questions</span>
               <span className="label-text-alt text-error">*</span>
             </label>
 
-            <select
-              className="select w-full"
-              value={roomConfig.problem}
-              onChange={(e) => {
-                const selectedProblem = problems.find((p) => p.title === e.target.value);
-                setRoomConfig({
-                  difficulty: selectedProblem.difficulty,
-                  problem: e.target.value,
-                });
-              }}
-            >
-              <option value="" disabled>
-                Choose a coding problem...
-              </option>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+              {problems.map((problem) => {
+                const isSelected = selectedProblems.some((item) => item.id === problem.id);
 
-              {problems.map((problem) => (
-                <option key={problem.id} value={problem.title}>
-                  {problem.title} ({problem.difficulty})
-                </option>
-              ))}
-            </select>
+                return (
+                  <button
+                    key={problem.id}
+                    type="button"
+                    onClick={() => toggleProblem(problem)}
+                    className={`text-left rounded-xl border-2 p-4 transition-all ${
+                      isSelected
+                        ? "border-primary bg-primary/10"
+                        : "border-base-300 bg-base-100 hover:border-primary/50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold">{problem.title}</p>
+                        <p className="text-sm text-base-content/60">{problem.category}</p>
+                      </div>
+                      {isSelected && <CheckCircle2Icon className="size-5 text-primary shrink-0" />}
+                    </div>
+                    <span className="badge badge-sm mt-3">{problem.difficulty}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* ROOM SUMMARY */}
-          {roomConfig.problem && (
+          {selectedProblems.length > 0 && (
             <div className="alert alert-success">
               <Code2Icon className="size-5" />
               <div>
                 <p className="font-semibold">Room Summary:</p>
                 <p>
-                  Problem: <span className="font-medium">{roomConfig.problem}</span>
+                  Questions: <span className="font-medium">{selectedProblems.length}</span>
+                </p>
+                <p className="text-sm">
+                  {selectedProblems.map((problem) => problem.title).join(", ")}
                 </p>
                 <p>
                   Max Participants: <span className="font-medium">2 (1-on-1 session)</span>
+                </p>
+                <p>
+                  Access: <span className="font-medium">Private invite link only</span>
                 </p>
               </div>
             </div>
@@ -74,7 +97,7 @@ function CreateSessionModal({
           <button
             className="btn btn-primary gap-2"
             onClick={onCreateRoom}
-            disabled={isCreating || !roomConfig.problem}
+            disabled={isCreating || selectedProblems.length === 0}
           >
             {isCreating ? (
               <LoaderIcon className="size-5 animate-spin" />
