@@ -281,10 +281,3 @@ Intervo keeps the full interview flow in one place:
 
 Simple, focused, and actually useful for interview practice.
 
-## License
-
-This project uses the ISC license.
-
-## Author
-
-Built by Shivam.
